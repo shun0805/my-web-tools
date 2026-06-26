@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- SEO Meta -->
+<meta name="description" content="大学院生・研究者向けの高機能文字数カウンター。参考文献セクションや引用記号を自動除外し、Shift-JISバイト数・学会発表の読み上げ時間もリアルタイム計算。PDF・Word対応。">
+<meta name="keywords" content="文字数カウンター,論文,学会発表,参考文献除外,読み上げ時間,大学院生,研究者,PDF,Word,Shift-JIS,バイト数">
+<meta name="author" content="AcadCount">
+<link rel="canonical" href="https://acadcount.example.com/">
+
+<!-- OGP (Open Graph Protocol) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="論文の文字数カウンター｜参考文献除外・読み上げ時間計算 | AcadCount">
+<meta property="og:description" content="大学院生・研究者向けの高機能文字数カウンター。参考文献セクションや引用記号を自動除外し、Shift-JISバイト数・学会発表の読み上げ時間もリアルタイム計算。PDF・Word対応。">
+<meta property="og:url" content="https://acadcount.example.com/">
+<meta property="og:image" content="https://acadcount.example.com/ogp.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:site_name" content="AcadCount">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="論文の文字数カウンター｜参考文献除外・読み上げ時間計算 | AcadCount">
+<meta name="twitter:description" content="大学院生・研究者向けの高機能文字数カウンター。参考文献セクションや引用記号を自動除外し、Shift-JISバイト数・学会発表の読み上げ時間もリアルタイム計算。PDF・Word対応。">
+<meta name="twitter:image" content="https://acadcount.example.com/ogp.png">
+<title>論文の文字数カウンター｜参考文献除外・読み上げ時間計算 | AcadCount</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<!-- PDF.js (Mozilla) — ブラウザ完結型PDF解析 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- mammoth.js — docx本文抽出 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy-900: #0A1628;
+  --navy-700: #1E3A5F;
+  --navy-500: #2E5496;
+  --accent:   #2E6BC4;
+  --accent-light: #4A90D9;
+  --paper:    #F8F9FC;
+  --surface:  #EEF2F8;
+  --border:   #D0DAE9;
+  --text-primary: #0A1628;
+  --text-secondary: #4A5C74;
+  --text-muted: #8497AE;
+  --green: #1E7E5A;
+  --green-bg: #EAF5F0;
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --radius: 10px;
+  --shadow-sm: 0 1px 3px rgba(10,22,40,.08), 0 1px 2px rgba(10,22,40,.06);
+  --shadow-md: 0 4px 12px rgba(10,22,40,.10), 0 2px 6px rgba(10,22,40,.06);
+}
+
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  font-family: var(--font-body);
+  background: var(--paper);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ── Header ── */
+header {
+  background: var(--navy-900);
+  padding: 0 24px;
+  position: sticky; top: 0; z-index: 100;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.header-inner {
+  max-width: 1100px; margin: 0 auto;
+  display: flex; align-items: center; gap: 16px;
+  height: 56px;
+}
+.logo {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 400; /* h1デフォルトのboldをリセット。DM Serif Displayのウェイトに委ねる */
+  color: #fff;
+  letter-spacing: .02em;
+}
+.logo span { color: var(--accent-light); font-style: italic; }
+.logo-sub {
+  font-family: var(--font-body);
+  font-size: .7rem;
+  font-weight: 400;
+  color: rgba(255,255,255,.45);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-left: 4px;
+  align-self: flex-end;
+  margin-bottom: 4px;
+}
+
+/* ── Layout ── */
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  grid-template-rows: auto auto 1fr;
+  gap: 20px;
+}
+@media (max-width: 800px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { order: -1; }
+}
+
+/* ── Stats bar ── */
+.stats-bar {
+  grid-column: 1 / -1;
+  background: var(--navy-700);
+  border-radius: var(--radius);
+  padding: 18px 24px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  box-shadow: var(--shadow-md);
+}
+@media (max-width: 600px) {
+  .stats-bar { grid-template-columns: repeat(2, 1fr); }
+}
+
+.stat-item {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.08);
+  transition: background .2s;
+  overflow: hidden;
+}
+.stat-item:hover { background: rgba(255,255,255,.10); }
+.stat-label {
+  font-size: .67rem; font-weight: 600;
+  letter-spacing: .09em; text-transform: uppercase;
+  color: rgba(255,255,255,.5);
+}
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.55rem; font-weight: 600;
+  color: #fff; line-height: 1;
+  position: relative; overflow: hidden; height: 1.6rem;
+}
+.stat-value-inner {
+  display: block;
+  transition: transform .22s cubic-bezier(.4,0,.2,1), opacity .22s;
+}
+.stat-value-inner.flip-out { transform: translateY(-100%); opacity: 0; }
+.stat-value-inner.flip-in  { transform: translateY(100%);  opacity: 0; }
+.stat-value-inner.visible  { transform: translateY(0);      opacity: 1; }
+.stat-unit { font-size: .72rem; color: rgba(255,255,255,.38); font-family: var(--font-body); margin-top: 1px; }
+
+/* ── FILE UPLOAD ZONE ── */
+.upload-zone-wrap {
+  grid-column: 1 / -1;
+}
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  position: relative;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--accent);
+  background: #f0f6ff;
+}
+.upload-zone input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.upload-icon {
+  width: 44px; height: 44px; flex-shrink: 0;
+  background: var(--surface);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+}
+.upload-main { flex: 1; }
+.upload-title {
+  font-weight: 600; font-size: .95rem; color: var(--text-primary);
+  margin-bottom: 3px;
+}
+.upload-desc { font-size: .78rem; color: var(--text-muted); }
+.upload-formats {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;
+}
+.fmt-badge {
+  font-family: var(--font-mono);
+  font-size: .65rem; font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: var(--surface);
+}
+.fmt-badge.pdf  { border-color: #e07070; color: #b03030; background: #fff0f0; }
+.fmt-badge.docx { border-color: #5080c0; color: #2050a0; background: #f0f4ff; }
+.fmt-badge.txt  { border-color: #60a060; color: #306030; background: #f0fff0; }
+
+/* File loaded state */
+.file-loaded-bar {
+  display: none;
+  margin-top: 12px;
+  background: var(--green-bg);
+  border: 1px solid #a0d0b8;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: .82rem;
+  color: var(--green);
+  align-items: center;
+  gap: 10px;
+}
+.file-loaded-bar.visible { display: flex; }
+.file-loaded-name { font-weight: 600; }
+.file-loaded-meta { color: #4a9070; }
+.btn-clear-file {
+  margin-left: auto;
+  background: none; border: 1px solid #a0c8b0;
+  border-radius: 6px; padding: 3px 10px;
+  font-size: .75rem; color: #3a7060; cursor: pointer;
+  transition: background .15s;
+}
+.btn-clear-file:hover { background: #d0ede0; }
+
+/* Progress bar */
+.parse-progress {
+  display: none;
+  margin-top: 10px;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: .8rem;
+  color: var(--text-secondary);
+  align-items: center;
+  gap: 12px;
+}
+.parse-progress.visible { display: flex; }
+.progress-bar-wrap {
+  flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; background: var(--accent); border-radius: 3px;
+  width: 0%; transition: width .3s;
+}
+
+/* PDF options panel */
+.pdf-options {
+  display: none;
+  margin-top: 10px;
+  background: #fffaf0;
+  border: 1px solid #f0d890;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.pdf-options.visible { display: block; }
+.pdf-options-title {
+  font-size: .78rem; font-weight: 600;
+  color: #7a5c00; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.pdf-opt-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.pdf-opt-btn {
+  font-size: .78rem; font-weight: 500;
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid #d0b060;
+  background: #fff8e0;
+  color: #6a4c00;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.pdf-opt-btn:hover { background: #ffe8a0; }
+.pdf-opt-btn.active { background: #f0c020; border-color: #c0a000; color: #3a2000; font-weight: 600; }
+
+/* PDF extraction notice */
+.pdf-notice {
+  display: none;
+  margin-top: 10px;
+  background: #f0f4ff;
+  border: 1px solid #b0c4e8;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: .78rem;
+  color: #2a4a8a;
+}
+.pdf-notice.visible { display: block; }
+.pdf-notice ul { padding-left: 16px; margin-top: 4px; }
+.pdf-notice li { margin-bottom: 2px; }
+
+/* ── Editor panel ── */
+.editor-panel { display: flex; flex-direction: column; gap: 12px; }
+.panel-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.card-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--surface);
+}
+.card-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
+.card-title { font-size: .82rem; font-weight: 600; letter-spacing: .04em; color: var(--text-secondary); text-transform: uppercase; }
+
+.textarea-wrap { position: relative; }
+#mainText {
+  width: 100%; min-height: 340px;
+  padding: 18px 20px;
+  font-family: var(--font-body);
+  font-size: .97rem; line-height: 1.75;
+  color: var(--text-primary);
+  border: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  resize: vertical; outline: none; background: transparent;
+}
+#mainText::placeholder { color: var(--text-muted); }
+#mainText:focus { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 0 0 var(--radius) var(--radius); }
+.char-hint {
+  position: absolute; bottom: 10px; right: 14px;
+  font-size: .7rem; color: var(--text-muted);
+  font-family: var(--font-mono); pointer-events: none;
+}
+
+/* ── Sidebar ── */
+.sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+.reading-card {
+  background: var(--navy-900); border-radius: var(--radius);
+  padding: 20px; color: #fff; box-shadow: var(--shadow-md);
+}
+.reading-card .card-title { color: rgba(255,255,255,.55); }
+.reading-card .card-icon  { color: var(--accent-light); }
+.reading-card .card-header { border-bottom-color: rgba(255,255,255,.1); padding: 0 0 14px 0; margin-bottom: 16px; }
+
+.time-display {
+  font-family: var(--font-mono); font-size: 2.4rem; font-weight: 600;
+  color: #fff; letter-spacing: -.02em; line-height: 1; margin-bottom: 4px;
+}
+.time-display .time-sep { color: rgba(255,255,255,.35); font-weight: 400; }
+.time-sub { font-size: .75rem; color: rgba(255,255,255,.4); margin-bottom: 18px; }
+.rate-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.rate-label { font-size: .72rem; color: rgba(255,255,255,.5); }
+.rate-val { font-family: var(--font-mono); font-size: .82rem; font-weight: 600; color: var(--accent-light); }
+
+input[type=range].rate-slider {
+  width: 100%; height: 4px;
+  -webkit-appearance: none; appearance: none;
+  background: rgba(255,255,255,.15); border-radius: 4px;
+  outline: none; margin-bottom: 4px; cursor: pointer;
+}
+input[type=range].rate-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent-light); border: 2px solid #fff;
+  box-shadow: 0 0 0 3px rgba(74,144,217,.3); transition: box-shadow .2s;
+}
+input[type=range].rate-slider:hover::-webkit-slider-thumb { box-shadow: 0 0 0 5px rgba(74,144,217,.4); }
+.rate-ticks { display: flex; justify-content: space-between; }
+.rate-tick { font-size: .63rem; color: rgba(255,255,255,.28); }
+
+.filter-card { padding: 18px; }
+.filter-title {
+  font-size: .82rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-secondary);
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 14px;
+}
+.filter-title svg { color: var(--accent); }
+.filter-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: 8px;
+  border: 1px solid var(--border); margin-bottom: 10px;
+  cursor: pointer; transition: border-color .15s, background .15s; user-select: none;
+}
+.filter-item:last-child { margin-bottom: 0; }
+.filter-item:hover { border-color: var(--accent); background: #f0f5ff; }
+.filter-item.active { border-color: var(--accent); background: #EEF4FF; }
+.filter-cb {
+  width: 18px; height: 18px; border: 2px solid var(--border); border-radius: 4px;
+  flex-shrink: 0; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, border-color .15s;
+}
+.filter-item.active .filter-cb { background: var(--accent); border-color: var(--accent); }
+.filter-cb svg { opacity: 0; transition: opacity .15s; }
+.filter-item.active .filter-cb svg { opacity: 1; }
+.filter-name { font-size: .87rem; font-weight: 600; color: var(--text-primary); }
+.filter-desc { font-size: .75rem; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+.filter-badge {
+  margin-left: auto; font-family: var(--font-mono);
+  font-size: .68rem; font-weight: 600;
+  padding: 2px 7px; border-radius: 20px;
+  background: var(--surface); color: var(--text-secondary);
+  flex-shrink: 0; align-self: center; white-space: nowrap;
+}
+.filter-item.active .filter-badge { background: var(--accent); color: #fff; }
+
+.mini-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mini-stat { background: var(--surface); border-radius: 8px; padding: 10px 12px; }
+.mini-stat-label { font-size: .67rem; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); }
+.mini-stat-val { font-family: var(--font-mono); font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-top: 2px; }
+
+.excl-bar {
+  display: none;
+  background: #FFF8E6; border: 1px solid #F0D080;
+  border-radius: 8px; padding: 10px 14px;
+  font-size: .78rem; color: #7A5C00; margin-top: 10px;
+}
+.excl-bar.visible { display: block; }
+.excl-bar strong { color: #5C4000; }
+
+.app-footer {
+  grid-column: 1 / -1;
+  text-align: center; font-size: .72rem;
+  color: var(--text-muted); padding-top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-value-inner { transition: none; }
+}
+</style>
+
+<!-- Structured Data (JSON-LD) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "AcadCount — 論文の文字数カウンター",
+  "description": "大学院生・研究者向けの高機能文字数カウンター。参考文献セクションや引用記号を自動除外し、Shift-JISバイト数・学会発表の読み上げ時間もリアルタイム計算。PDF・Word対応。",
+  "url": "https://acadcount.example.com/",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Web Browser",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "JPY"
+  },
+  "audience": {
+    "@type": "Audience",
+    "audienceType": "大学院生・研究者・大学生"
+  }
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <h1 class="logo">
+      Acad<span>Count</span>
+      <span class="logo-sub">学術特化型 文字数カウンター</span>
+    </h1>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- Stats Bar -->
+  <div class="stats-bar">
+    <div class="stat-item">
+      <span class="stat-label">総文字数（空白込み）</span>
+      <div class="stat-value"><span class="stat-value-inner visible" id="val-total">0</span></div>
+      <span class="stat-unit">字</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">総文字数（空白抜き）</span>
+      <div class="stat-value"><span class="stat-value-inner visible" id="val-nospace">0</span></div>
+      <span class="stat-unit">字</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">単語数（英語）</span>
+      <div class="stat-value"><span class="stat-value-inner visible" id="val-words">0</span></div>
+      <span class="stat-unit">words</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">データサイズ（Shift-JIS）</span>
+      <div class="stat-value"><span class="stat-value-inner visible" id="val-bytes">0</span></div>
+      <span class="stat-unit">bytes</span>
+    </div>
+  </div>
+
+  <!-- ── FILE UPLOAD ZONE ── -->
+  <div class="upload-zone-wrap" style="grid-column: 1 / -1;">
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt" title="ファイルを選択">
+      <div class="upload-icon">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </div>
+      <div class="upload-main">
+        <div class="upload-title">ファイルをドロップ、またはクリックして選択</div>
+        <div class="upload-desc">PDF・Wordから本文テキストを自動抽出します。テキストエリアに直接入力しても使えます。</div>
+        <div class="upload-formats">
+          <span class="fmt-badge pdf">PDF</span>
+          <span class="fmt-badge docx">DOCX / DOC</span>
+          <span class="fmt-badge txt">TXT</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PDF page range options -->
+    <div class="pdf-options" id="pdfOptions">
+      <div class="pdf-options-title">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        PDF 抽出範囲のヒント（ページ指定）
+      </div>
+      <div style="font-size:.78rem; color:#7a5c00; margin-bottom:8px;">
+        著者情報・図キャプション等が混入する場合、対象ページ範囲を絞れます。<br>
+        <small>例：本文が3〜18ページなら「3」「18」を指定</small>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <label style="font-size:.78rem; color:#7a5c00;">開始ページ</label>
+        <input type="number" id="pdfPageStart" min="1" value="" placeholder="1" style="width:64px; padding:4px 8px; border:1px solid #d0b060; border-radius:6px; font-size:.82rem;">
+        <label style="font-size:.78rem; color:#7a5c00;">〜 終了ページ</label>
+        <input type="number" id="pdfPageEnd" min="1" value="" placeholder="末尾" style="width:64px; padding:4px 8px; border:1px solid #d0b060; border-radius:6px; font-size:.82rem;">
+        <button id="pdfReExtract" style="padding:5px 14px; background:#f0c020; border:1px solid #c0a000; border-radius:6px; font-size:.78rem; font-weight:600; color:#3a2000; cursor:pointer;">再抽出</button>
+        <span id="pdfTotalPages" style="font-size:.75rem; color:#9a7c30;"></span>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="parse-progress" id="parseProgress">
+      <span id="parseLabel">解析中...</span>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <span id="parsePct">0%</span>
+    </div>
+
+    <!-- Loaded file info -->
+    <div class="file-loaded-bar" id="fileLoadedBar">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      <span class="file-loaded-name" id="fileLoadedName"></span>
+      <span class="file-loaded-meta" id="fileLoadedMeta"></span>
+      <button class="btn-clear-file" id="clearFileBtn">クリア</button>
+    </div>
+
+    <!-- PDF extraction notice -->
+    <div class="pdf-notice" id="pdfNotice">
+      <strong>📄 PDF抽出について</strong>
+      <ul>
+        <li>著者名・所属・図のキャプションはPDF内で本文と区別できない場合があります</li>
+        <li>不要な行が混入した場合は、テキストエリアで直接削除してください</li>
+        <li>スキャン型PDFは文字認識（OCR）が必要なため読み込み不可です</li>
+        <li>ページ範囲を指定すると不要な箇所を除外できます（上記オプション）</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Editor -->
+  <div class="editor-panel">
+    <div class="panel-card">
+      <div class="card-header">
+        <span class="card-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </span>
+        <span class="card-title">論文テキスト</span>
+        <span style="margin-left:auto; font-size:.72rem; color:var(--text-muted);">ファイル読み込み後も直接編集できます</span>
+      </div>
+      <div class="textarea-wrap">
+        <textarea id="mainText" placeholder="ここに論文・発表原稿のテキストをペーストまたは入力してください。&#10;&#10;例：本研究では、深層学習を用いた日本語テキスト分類の新手法を提案する。従来手法と比較し、本提案手法は精度・速度ともに優れた結果を示した [1]。&#10;&#10;参考文献&#10;[1] 山田太郎 (2024). 深層学習とその応用. 情報処理学会論文誌, 65(1), 1-12."></textarea>
+        <span class="char-hint" id="char-hint">0 字</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+
+    <!-- Reading Time -->
+    <div class="reading-card">
+      <div class="card-header">
+        <span class="card-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </span>
+        <span class="card-title">読み上げ時間の目安</span>
+      </div>
+      <div class="time-display">
+        <span id="time-min">0</span><span class="time-sep">分</span>
+        <span id="time-sec">00</span><span class="time-sep">秒</span>
+      </div>
+      <div class="time-sub">学会発表での推定スピーチ時間</div>
+      <div class="rate-row">
+        <span class="rate-label">読み上げレート</span>
+        <span class="rate-val"><span id="rate-disp">320</span> 字/分</span>
+      </div>
+      <input type="range" class="rate-slider" id="rate-slider" min="250" max="400" value="320" step="5">
+      <div class="rate-ticks">
+        <span class="rate-tick">250字/分<br>ゆっくり</span>
+        <span class="rate-tick" style="text-align:right">400字/分<br>速め</span>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="panel-card filter-card">
+      <div class="filter-title">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        学術除外フィルター
+      </div>
+      <div class="filter-item active" id="filter-ref" onclick="toggleFilter('ref')">
+        <div class="filter-cb">
+          <svg width="11" height="11" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <div class="filter-text">
+          <div class="filter-name">参考文献セクションを除外</div>
+          <div class="filter-desc">「参考文献」「Reference(s)」以降をカウントしない</div>
+        </div>
+        <span class="filter-badge" id="badge-ref">—</span>
+      </div>
+      <div class="filter-item active" id="filter-cite" onclick="toggleFilter('cite')">
+        <div class="filter-cb">
+          <svg width="11" height="11" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <div class="filter-text">
+          <div class="filter-name">引用記号を除外</div>
+          <div class="filter-desc">[1], [1,2], (山田, 2024) などをカウントしない</div>
+        </div>
+        <span class="filter-badge" id="badge-cite">—</span>
+      </div>
+      <div class="excl-bar" id="excl-bar">
+        フィルター適用中：<strong id="excl-detail"></strong> を除外しています
+      </div>
+    </div>
+
+    <!-- Mini stats -->
+    <div class="panel-card" style="padding:16px;">
+      <div class="filter-title" style="margin-bottom:12px;">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        詳細ブレークダウン
+      </div>
+      <div class="mini-stats">
+        <div class="mini-stat"><div class="mini-stat-label">日本語文字</div><div class="mini-stat-val" id="ms-ja">0</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">英数字</div><div class="mini-stat-val" id="ms-en">0</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">句読点</div><div class="mini-stat-val" id="ms-punct">0</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">段落数</div><div class="mini-stat-val" id="ms-para">0</div></div>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <div class="app-footer">
+    AcadCount v2.0 — 大学院生・研究者のための学術執筆支援ツール
+  </div>
+
+</div><!-- /app -->
+
+<script>
+(function () {
+  'use strict';
+
+  // PDF.js worker setup
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  // ── State
+  const state = {
+    filterRef: true,
+    filterCite: true,
+    rate: 320,
+    // PDF re-extraction
+    currentPdfData: null,
+    currentPdfTotalPages: 0
+  };
+
+  // ── DOM
+  const textarea      = document.getElementById('mainText');
+  const rateSlider    = document.getElementById('rate-slider');
+  const rateDisp      = document.getElementById('rate-disp');
+  const charHint      = document.getElementById('char-hint');
+  const valTotal      = document.getElementById('val-total');
+  const valNospace    = document.getElementById('val-nospace');
+  const valWords      = document.getElementById('val-words');
+  const valBytes      = document.getElementById('val-bytes');
+  const timeMin       = document.getElementById('time-min');
+  const timeSec       = document.getElementById('time-sec');
+  const msJa          = document.getElementById('ms-ja');
+  const msEn          = document.getElementById('ms-en');
+  const msPunct       = document.getElementById('ms-punct');
+  const msPara        = document.getElementById('ms-para');
+  const badgeRef      = document.getElementById('badge-ref');
+  const badgeCite     = document.getElementById('badge-cite');
+  const exclBar       = document.getElementById('excl-bar');
+  const exclDetail    = document.getElementById('excl-detail');
+  const fileInput     = document.getElementById('fileInput');
+  const uploadZone    = document.getElementById('uploadZone');
+  const parseProgress = document.getElementById('parseProgress');
+  const progressFill  = document.getElementById('progressFill');
+  const parsePct      = document.getElementById('parsePct');
+  const parseLabel    = document.getElementById('parseLabel');
+  const fileLoadedBar = document.getElementById('fileLoadedBar');
+  const fileLoadedName= document.getElementById('fileLoadedName');
+  const fileLoadedMeta= document.getElementById('fileLoadedMeta');
+  const clearFileBtn  = document.getElementById('clearFileBtn');
+  const pdfOptions    = document.getElementById('pdfOptions');
+  const pdfNotice     = document.getElementById('pdfNotice');
+  const pdfPageStart  = document.getElementById('pdfPageStart');
+  const pdfPageEnd    = document.getElementById('pdfPageEnd');
+  const pdfReExtract  = document.getElementById('pdfReExtract');
+  const pdfTotalPages = document.getElementById('pdfTotalPages');
+
+  // ── Regex
+  const RE_REF_HEADING = /^(参考文献|引用文献|文\s*献|References?|Bibliography)\s*$/im;
+  const RE_CITE = /(\[\s*\d+(?:\s*[,、]\s*\d+)*\s*\]|\[\s*\d+\s*[-–]\s*\d+\s*\]|\([^)]{1,60}(?:,\s*\d{4}[a-z]?(?:\s*[,;]\s*)?)+\))/g;
+
+  // ── Shift-JIS byte estimator
+  function shiftJisBytes(text) {
+    let bytes = 0;
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      bytes += (code <= 0x7F || (code >= 0xFF61 && code <= 0xFF9F)) ? 1 : 2;
+    }
+    return bytes;
+  }
+
+  function countWords(text) {
+    const s = text.replace(/[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/g, ' ');
+    return (s.match(/\b[a-zA-Z'-]+\b/g) || []).length;
+  }
+
+  // ── Process text with filters
+  function processText(raw) {
+    let text = raw;
+    let removedRef = 0, removedCite = 0;
+    if (state.filterRef) {
+      const m = RE_REF_HEADING.exec(text);
+      if (m) {
+        const lineStart = text.lastIndexOf('\n', m.index);
+        const cutPos = lineStart === -1 ? m.index : lineStart;
+        removedRef = text.length - cutPos;
+        text = text.slice(0, cutPos);
+      }
+    }
+    if (state.filterCite) {
+      text = text.replace(RE_CITE, match => { removedCite += match.length; return ''; });
+    }
+    return { text, removedRef, removedCite };
+  }
+
+  // ── Animate stat value
+  function flipValue(el, newVal) {
+    const str = newVal.toLocaleString('ja-JP');
+    if (el.textContent === str) return;
+    el.classList.add('flip-out');
+    setTimeout(() => {
+      el.textContent = str;
+      el.classList.remove('flip-out');
+      el.classList.add('flip-in');
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.classList.remove('flip-in');
+        el.classList.add('visible');
+      }));
+    }, 100);
+    setTimeout(() => el.classList.remove('visible'), 110);
+  }
+
+  // ── Update UI
+  let raf = null;
+  function scheduleUpdate() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(doUpdate);
+  }
+
+  function doUpdate() {
+    const raw = textarea.value;
+    const { text, removedRef, removedCite } = processText(raw);
+    const total   = text.length;
+    const nospace = text.replace(/\s/g, '').length;
+    const words   = countWords(text);
+    const bytes   = shiftJisBytes(text);
+
+    flipValue(valTotal,   total);
+    flipValue(valNospace, nospace);
+    flipValue(valWords,   words);
+    flipValue(valBytes,   bytes);
+    charHint.textContent = total.toLocaleString('ja-JP') + ' 字';
+
+    const totalSec = Math.round((total / state.rate) * 60);
+    timeMin.textContent = Math.floor(totalSec / 60);
+    timeSec.textContent = String(totalSec % 60).padStart(2, '0');
+
+    const jaChars  = (text.match(/[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u3040-\u30FF]/g) || []).length;
+    const enChars  = (text.match(/[a-zA-Z0-9]/g) || []).length;
+    const punctCh  = (text.match(/[。、，．・「」『』【】（）…‥]/g) || []).length;
+    const parasCnt = raw.split(/\n{2,}/).filter(p => p.trim().length > 0).length;
+
+    msJa.textContent    = jaChars.toLocaleString('ja-JP');
+    msEn.textContent    = enChars.toLocaleString('ja-JP');
+    msPunct.textContent = punctCh.toLocaleString('ja-JP');
+    msPara.textContent  = parasCnt.toLocaleString('ja-JP');
+
+    badgeRef.textContent  = removedRef  > 0 ? '-' + removedRef.toLocaleString()  + '字' : '—';
+    badgeCite.textContent = removedCite > 0 ? '-' + removedCite.toLocaleString() + '字' : '—';
+
+    const parts = [];
+    if (removedRef  > 0) parts.push('参考文献セクション (' + removedRef.toLocaleString()  + '字)');
+    if (removedCite > 0) parts.push('引用記号 ('          + removedCite.toLocaleString() + '字)');
+    if (parts.length) { exclBar.classList.add('visible'); exclDetail.textContent = parts.join(' ／ '); }
+    else              { exclBar.classList.remove('visible'); }
+  }
+
+  // ── Toggle filters
+  window.toggleFilter = function(key) {
+    if (key === 'ref') {
+      state.filterRef = !state.filterRef;
+      document.getElementById('filter-ref').classList.toggle('active', state.filterRef);
+    } else {
+      state.filterCite = !state.filterCite;
+      document.getElementById('filter-cite').classList.toggle('active', state.filterCite);
+    }
+    scheduleUpdate();
+  };
+
+  // ── Rate slider
+  rateSlider.addEventListener('input', () => {
+    state.rate = parseInt(rateSlider.value, 10);
+    rateDisp.textContent = state.rate;
+    scheduleUpdate();
+  });
+
+  // ── Textarea debounce
+  let debounce = null;
+  textarea.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(scheduleUpdate, 30); });
+  textarea.addEventListener('paste', () => { clearTimeout(debounce); debounce = setTimeout(scheduleUpdate, 80); });
+
+  // ── Progress helpers
+  function showProgress(label) {
+    parseLabel.textContent = label;
+    progressFill.style.width = '0%';
+    parsePct.textContent = '0%';
+    parseProgress.classList.add('visible');
+  }
+  function updateProgress(pct) {
+    progressFill.style.width = pct + '%';
+    parsePct.textContent = Math.round(pct) + '%';
+  }
+  function hideProgress() {
+    parseProgress.classList.remove('visible');
+  }
+
+  function showFileLoaded(name, meta) {
+    fileLoadedName.textContent = name;
+    fileLoadedMeta.textContent = meta;
+    fileLoadedBar.classList.add('visible');
+  }
+
+  // ── PDF extraction
+  async function extractPdf(arrayBuffer, startPage, endPage) {
+    if (typeof pdfjsLib === 'undefined') throw new Error('PDF.jsが読み込まれていません');
+    showProgress('PDFを解析中...');
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const total = pdf.numPages;
+    state.currentPdfTotalPages = total;
+    pdfTotalPages.textContent = '全 ' + total + ' ページ';
+
+    const s = Math.max(1, startPage || 1);
+    const e = Math.min(total, endPage || total);
+
+    let lines = [];
+    for (let i = s; i <= e; i++) {
+      updateProgress(((i - s) / (e - s + 1)) * 100);
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+
+      // Group text items into lines by Y position
+      const byY = {};
+      for (const item of content.items) {
+        if (!item.str) continue;
+        const y = Math.round(item.transform[5]);
+        if (!byY[y]) byY[y] = [];
+        byY[y].push({ x: item.transform[4], str: item.str });
+      }
+      const sortedYs = Object.keys(byY).map(Number).sort((a, b) => b - a);
+      for (const y of sortedYs) {
+        const row = byY[y].sort((a, b) => a.x - b.x).map(i => i.str).join('');
+        lines.push(row);
+      }
+      lines.push(''); // page break as blank line
+    }
+    hideProgress();
+    return lines.join('\n');
+  }
+
+  // ── Word (docx) extraction via mammoth
+  async function extractDocx(arrayBuffer) {
+    if (typeof mammoth === 'undefined') throw new Error('mammoth.jsが読み込まれていません');
+    showProgress('Wordファイルを解析中...');
+    updateProgress(30);
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    updateProgress(100);
+    hideProgress();
+    return result.value;
+  }
+
+  // ── Main file handler
+  async function handleFile(file) {
+    if (!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    const sizeKB = (file.size / 1024).toFixed(1);
+
+    // Reset PDF state
+    state.currentPdfData = null;
+    pdfOptions.classList.remove('visible');
+    pdfNotice.classList.remove('visible');
+
+    try {
+      if (ext === 'txt') {
+        const text = await file.text();
+        textarea.value = text;
+        showFileLoaded(file.name, sizeKB + ' KB · テキストファイル');
+        scheduleUpdate();
+
+      } else if (ext === 'pdf') {
+        const buf = await file.arrayBuffer();
+        state.currentPdfData = buf.slice(0); // store for re-extraction
+        const text = await extractPdf(buf);
+        textarea.value = text;
+
+        // Show PDF-specific UI
+        pdfPageStart.value = '';
+        pdfPageEnd.value = '';
+        pdfOptions.classList.add('visible');
+        pdfNotice.classList.add('visible');
+        showFileLoaded(file.name, sizeKB + ' KB · PDF · ' + state.currentPdfTotalPages + 'ページ');
+        scheduleUpdate();
+
+      } else if (ext === 'docx' || ext === 'doc') {
+        const buf = await file.arrayBuffer();
+        const text = await extractDocx(buf);
+        textarea.value = text;
+        showFileLoaded(file.name, sizeKB + ' KB · Wordファイル');
+        scheduleUpdate();
+
+      } else {
+        alert('対応していないファイル形式です。PDF・DOCX・TXTをお使いください。');
+      }
+    } catch (err) {
+      hideProgress();
+      console.error(err);
+      alert('ファイルの読み込みに失敗しました。\n' + err.message);
+    }
+  }
+
+  // ── PDF re-extract with page range
+  pdfReExtract.addEventListener('click', async () => {
+    if (!state.currentPdfData) return;
+    const s = parseInt(pdfPageStart.value) || 1;
+    const e = parseInt(pdfPageEnd.value)   || state.currentPdfTotalPages;
+    try {
+      const buf = state.currentPdfData.slice(0);
+      const text = await extractPdf(buf, s, e);
+      textarea.value = text;
+      scheduleUpdate();
+    } catch (err) {
+      hideProgress();
+      alert('再抽出に失敗しました: ' + err.message);
+    }
+  });
+
+  // ── Clear file
+  clearFileBtn.addEventListener('click', () => {
+    textarea.value = '';
+    fileLoadedBar.classList.remove('visible');
+    pdfOptions.classList.remove('visible');
+    pdfNotice.classList.remove('visible');
+    fileInput.value = '';
+    state.currentPdfData = null;
+    scheduleUpdate();
+  });
+
+  // ── File input events
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+  // ── Drag and drop
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+
+  // ── Init
+  doUpdate();
+})();
+</script>
+</body>
+</html>
